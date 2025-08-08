@@ -9,6 +9,7 @@ from escape_helpers import sparql_escape_datetime
 
 RELATIVE_STORAGE_PATH = os.environ.get("MU_APPLICATION_FILE_STORAGE_PATH", "").rstrip("/")
 STORAGE_PATH = f"/share/{RELATIVE_STORAGE_PATH}"
+FILE_URI_BATCH_SIZE = os.environ.get('FILE_URI_BATCH_SIZE', 100)
 
 # Ported from https://github.com/mu-semtech/file-service/blob/dd42c51a7344e4f7a3f7fba2e6d40de5d7dd1972/web.rb#L228
 def shared_uri_to_path(uri):
@@ -25,7 +26,7 @@ def file_to_shared_uri(file_name):
 class FileCache:
     cache_path = "/cache/files"
     last_created_path = "/cache/last_created"
-    
+
     def get_file_uris(self):
         file_uris = []
         last_created = None
@@ -33,7 +34,7 @@ class FileCache:
         if os.path.isfile(self.last_created_path):
             with open(self.last_created_path, "r") as f:
                 last_created = f.readline().strip()
-            
+
             old_file_uris = self._read_file_uris_from_cache()
             new_file_uris, last_created = self._get_file_uris_from_db(last_created)
 
@@ -43,7 +44,7 @@ class FileCache:
 
         self._write_file_uris_to_cache(file_uris, last_created)
         return file_uris
-    
+
     def _read_file_uris_from_cache(self):
         file_uris = []
         if os.path.isfile(self.cache_path):
@@ -56,7 +57,7 @@ class FileCache:
             with open(self.cache_path, "w") as f:
                 for uri in file_uris:
                     f.write(f"{uri}\n")
-        
+
         if last_created:
             with open(self.last_created_path, "w") as f:
                 f.write(f"{last_created}\n")
@@ -91,8 +92,8 @@ SELECT DISTINCT ?file ?created WHERE {
     }
     ORDER BY ASC(?created) }
 }
-LIMIT 100
-""").substitute(created_filter=f"FILTER (?created > {sparql_escape_datetime(from_date)})" if from_date else ""))
+LIMIT $batch_size
+""").substitute(created_filter=f"FILTER (?created > {sparql_escape_datetime(from_date)})" if from_date else "",batch_size=FILE_URI_BATCH_SIZE))
             last_created = None
             file_uris = []
             bindings = query_res["results"]["bindings"]
